@@ -1,0 +1,91 @@
+<div>
+	<input type="text" id="username" name="username" placeholder="username" />
+	|
+	<label for="name_color">name color</label>
+	<input type="color" id="name_color" name="name_color" />
+	|
+	<label for="auto_poll">auto poll</label>
+	<input type="checkbox" id="auto_poll" name="auto_poll" />
+	|
+	<label for="poll_rate">time between polls (1s-10s)</label>
+	<input type="range" id="poll_rate" name="poll_rate" min="1" max="10" />
+	|
+	<form action="/css">
+		<input type="submit" value="css" />
+	</form>
+</div>
+<div>
+	<input type="text" id="message_bar" placeholder="type message..." />
+	<button onclick="send_message()">send</button>
+	<button onclick="poll_messages()">poll</button>
+</div>
+<div id="messages"></div>
+
+<script>
+	const messages    = document.getElementById('messages');
+	const auto_poll   = document.getElementById('auto_poll');
+	const poll_rate   = document.getElementById('poll_rate');
+	const message_bar = document.getElementById('message_bar');
+
+	const new_id_request = (id) => new Request("/request-id", { method: "POST", body: `${id}` });
+
+	let id = undefined;
+	(async function get_id() {
+		for (let i = 0; i < 10; i++) {
+			let quit_loop = false;
+			let id_request = new_id_request(i);
+			
+			const result = await fetch(id_request);
+			const value  = await result.json();
+			console.log(i , value);
+			if (value) {
+				id = i;
+				break;
+			}
+		}
+	})();
+
+	async function send_message() {
+		const message = JSON.stringify({ 
+			"id": id,
+			"username": username.value,
+			"name_color": name_color.value,
+			"text": message_bar.value
+		});
+		let request = new Request("/message", {
+			method: "POST",
+			body: message
+		});
+		const response = await fetch(request);
+		message_bar.value = '';
+	}
+
+	async function poll_messages() {
+		let request = new Request("/poll-messages", {
+			method: "POST",
+			body: `${id}`
+		});
+		const response = await fetch(request);
+		const json = await response.json();
+		if (json.messages.length) for (let i of json.messages) {
+			const p = document.createElement('p');
+			p.innerHTML = `<span style="color:${i.name_color}">${i.username}: </span>${i.text}<hr />`;
+			messages.prepend(p);
+		}
+	}
+
+	let poller;
+	function check_poller() {
+		if (auto_poll.checked) {
+			poller = setInterval(poll_messages, poll_rate.value * 1000);
+		} else {
+			clearInterval(poller);
+		}
+
+	}
+
+	check_poller();
+
+	auto_poll.addEventListener('change', e => check_poller());
+	poll_rate.addEventListener('change', e => check_poller());
+</script>
